@@ -47,3 +47,5 @@ Future schema changes must use additive SQLite migrations. Do not delete or recr
 
 
 Automated Android APK builds run through GitHub Actions on changes under `android/`.
+
+Build workflow refreshed with current Android SDK setup action.

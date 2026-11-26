@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#0e5a1f"><title>Administrator Setup · The Green Grocery Shop</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;padding:24px 16px;display:grid;place-items:center;background:linear-gradient(145deg,#073b17,#0e5a1f 58%,#58b924);font-family:Arial,sans-serif;color:#17221a}.panel{width:100%;max-width:460px;background:#fff;border-radius:24px;padding:28px 24px;box-shadow:0 24px 70px #001b0b66}.brand{text-align:center;color:#0e5a1f;font-weight:900;font-size:20px}.sub{text-align:center;color:#64748b;font-size:13px;line-height:1.5;margin:9px 0 23px}.field{display:block;margin:13px 0;color:#334155;font-size:12px;font-weight:700}.field input{width:100%;margin-top:6px;padding:13px;border:1px solid #cbd5e1;border-radius:11px;font-size:15px;outline-color:#58b924}.btn{width:100%;border:0;border-radius:12px;background:#0e5a1f;color:white;padding:14px;font-weight:800;font-size:14px;margin-top:10px}.btn:disabled{opacity:.55}.notice{display:none;margin-top:14px;padding:12px;border-radius:10px;font-size:12px;line-height:1.5;overflow-wrap:anywhere}.error{background:#fef2f2;color:#991b1b}.success{background:#f0fdf4;color:#166534}.foot{text-align:center;color:#94a3b8;font-size:10px;margin-top:22px}
+</style></head>
+<body><main class="panel">
+<div class="brand">THE GREEN GROCERY SHOP</div><p class="sub">One-time shop Administrator registration<br>Register the owner account before signing in to the Android POS.</p>
+<form id="setup-form">
+<label class="field">One-time shop activation key<input id="activation-key" autocomplete="off" required minlength="32"></label>
+<label class="field">Administrator full name<input id="display-name" autocomplete="name" required minlength="2" maxlength="80"></label>
+<label class="field">Administrator username<input id="username" autocomplete="username" required minlength="3" maxlength="32" pattern="[A-Za-z0-9_.-]+"></label>
+<label class="field">Password (10–128 characters)<input id="password" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+<label class="field">Confirm password<input id="confirm-password" type="password" autocomplete="new-password" required minlength="10" maxlength="128"></label>
+<button class="btn" id="submit" type="submit">Register First Administrator</button>
+</form><div id="notice" class="notice" role="status"></div>
+<div class="foot">FX DEVELOPMENT · Secure one-time setup</div>
+</main>
+<script>
+const API='https://dawn-violet-34da.the-green-grocery-shop.workers.dev';
+const form=document.getElementById('setup-form'),button=document.getElementById('submit'),notice=document.getElementById('notice');
+function message(text,ok){notice.textContent=text;notice.className='notice '+(ok?'success':'error');notice.style.display='block';}
+async function check(){try{const r=await fetch(API+'/api/shop/status',{cache:'no-store'});const d=await r.json();if(!r.ok||!d.configured)throw Error('Shop setup service is unavailable. Try again later.');if(d.owner_registered){form.style.display='none';message('Administrator registration is already complete. This page is permanently locked for this shop. Open the Android app and sign in.',true);}}catch(e){form.style.display='none';message(e.message||'Could not verify shop setup. Refresh when internet is available.',false);}}
+form.addEventListener('submit',async e=>{e.preventDefault();const key=document.getElementById('activation-key').value.trim(),name=document.getElementById('display-name').value.trim(),username=document.getElementById('username').value.trim(),password=document.getElementById('password').value,confirm=document.getElementById('confirm-password').value;if(password!==confirm)return message('The passwords do not match.',false);button.disabled=true;button.textContent='Registering securely…';try{const r=await fetch(API+'/api/owner/setup',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({activation_key:key,display_name:name,username,password})});const d=await r.json();if(!r.ok||!d.created){const support=d.support_code?' Support code: '+d.support_code:'';throw Error((d.error||'Administrator registration failed.')+support);}form.reset();form.style.display='none';message(d.message+' You can now sign in on the Android app. Keep your username and password safe.',true);}catch(err){message(err.message||'Could not reach the shop service. Check internet and retry.',false);button.disabled=false;button.textContent='Register First Administrator';}});
+check();
+</script></body></html>

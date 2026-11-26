@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Preserve the original shop UI's small custom styles. */
+.no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }
+.no-scrollbar::-webkit-scrollbar { display:none; }
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+input[type=number] { -moz-appearance:textfield; }
+@keyframes scanLaser { 0%,100%{transform:translateY(0);opacity:.9} 50%{transform:translateY(112px);opacity:.45} }
+.scan-laser { animation:scanLaser 2.2s ease-in-out infinite; }
+.mvp-delete { border:1px solid #fecaca;background:#fff1f2;color:#b91c1c;border-radius:9px;padding:7px 10px;font-size:11px;font-weight:800;white-space:nowrap; }
+.empty-state { background:#fff;border:1px dashed #cbd5e1;border-radius:14px;padding:20px;text-align:center;color:#64748b;font-size:13px; }
+html,body { width:100%;min-height:100%; }
+body { min-height:100dvh; }
+button { touch-action:manipulation; }

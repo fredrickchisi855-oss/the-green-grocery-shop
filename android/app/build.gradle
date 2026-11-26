@@ -1,0 +1,19 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'zw.fxdevelopment.greengrocery'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'zw.fxdevelopment.greengrocery'
+        minSdk 24
+        targetSdk 34
+        versionCode 3
+        versionName '1.2.0'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

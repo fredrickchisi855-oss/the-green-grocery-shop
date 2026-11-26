@@ -1,0 +1,8 @@
+name = "dawn-violet-34da"
+main = "worker.js"
+compatibility_date = "2026-11-21"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "green-grocery-shop-db"
+database_id = "e7d5c53e-c446-4e92-94db-f5ef85099544"

@@ -1,0 +1,9 @@
+<resources>
+    <style name="Theme.GreenGrocery.Launcher" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:windowSplashScreenBackground">#0E5A1F</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_blank</item>
+        <item name="android:windowSplashScreenAnimationDuration">1</item>
+        <item name="android:windowBackground">#0E5A1F</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>

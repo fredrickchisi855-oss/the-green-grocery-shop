@@ -44,3 +44,6 @@ A successful pipeline will publish `app-debug.apk` as a downloadable job artifac
 ## Data preservation
 
 Future schema changes must use additive SQLite migrations. Do not delete or recreate the database to apply an update, because that would erase shop records.
+
+
+Automated Android APK builds run through GitHub Actions on changes under `android/`.

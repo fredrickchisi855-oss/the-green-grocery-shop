@@ -1,0 +1,177 @@
+stages:
+  - validate
+  - build
+  - deploy
+  - issue-pairing
+
+android-web-assets:
+  stage: validate
+  image: node:22-alpine
+  script:
+    - npx --yes tailwindcss@3.4.17 -c android/tailwind.config.cjs -i android/app/src/main/assets/www/tailwind.input.css -o android/app/src/main/assets/www/offline.css --minify
+    - node --input-type=commonjs -e "const fs=require('fs');const h=fs.readFileSync('android/app/src/main/assets/www/index.html','utf8');const m=[...h.matchAll(/<script\\b[^>]*>([\\s\\S]*?)<\\/script>/gi)].map(x=>x[1]).filter(x=>x.trim());if(!m.length)throw Error('No embedded JavaScript found');m.forEach((s,i)=>{new Function(s);console.log('Embedded script '+(i+1)+' syntax OK')});if(!h.trimEnd().endsWith('</html>'))throw Error('HTML document closing tag missing');"
+  artifacts:
+    paths:
+      - android/app/src/main/assets/www/offline.css
+    expire_in: 1 day
+  rules:
+    - changes:
+        - android/app/src/main/assets/www/**/*
+        - android/tailwind.config.cjs
+        - The_Green_Grocery_Shop_POS__2_.html
+        - .gitlab-ci.yml
+
+android-debug-apk:
+  stage: build
+  image: ghcr.io/cirruslabs/android-sdk:35
+  before_script:
+    - curl -fsSL https://services.gradle.org/distributions/gradle-8.9-bin.zip -o /tmp/gradle.zip
+    - unzip -q /tmp/gradle.zip -d /opt
+    - export PATH="/opt/gradle-8.9/bin:$PATH"
+    - yes | sdkmanager --licenses >/dev/null || true
+  script:
+    - test -s android/app/src/main/assets/www/offline.css
+    - export PATH="/opt/gradle-8.9/bin:$PATH"
+    - cd android
+    - gradle --no-daemon --stacktrace assembleDebug
+  artifacts:
+    when: on_success
+    expire_in: 7 days
+    paths:
+      - android/app/build/outputs/apk/debug/app-debug.apk
+  rules:
+    - changes:
+        - android/**/*
+        - .gitlab-ci.yml
+
+cloudflare-api-smoke-test:
+  stage: validate
+  image: node:22-alpine
+  script:
+    - node --check cloudflare/worker.js
+    - |
+      node --input-type=module <<'NODE'
+      const base = 'https://dawn-violet-34da.the-green-grocery-shop.workers.dev';
+      const health = await fetch(base + '/health');
+      const healthBody = await health.json();
+      if (!health.ok || healthBody.database !== 'connected') {
+        throw new Error('Cloudflare Worker health check failed: ' + JSON.stringify(healthBody));
+      }
+      const unauthorized = await fetch(base + '/api/sync/pull');
+      if (unauthorized.status !== 401) {
+        throw new Error('Unauthenticated sync pull was not rejected: HTTP ' + unauthorized.status);
+      }
+      const ownerUnauthorized = await fetch(base + '/api/owner/enroll', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+      });
+      if (ownerUnauthorized.status !== 401) {
+        throw new Error('Unauthenticated owner enrollment was not rejected: HTTP ' + ownerUnauthorized.status);
+      }
+      const invalidPair = await fetch(base + '/api/pair', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({code: 'invalid-test-code'})
+      });
+      if (invalidPair.status !== 400) {
+        throw new Error('Invalid pairing code was not rejected: HTTP ' + invalidPair.status);
+      }
+      console.log('Cloudflare health, protected sync route, and invalid pairing checks passed.');
+      NODE
+  rules:
+    - changes:
+        - cloudflare/**/*
+        - .gitlab-ci.yml
+
+
+
+
+# Deploy the authenticated Cloudflare Worker after validation.
+cloudflare-worker-deploy:
+  stage: deploy
+  image: node:22-alpine
+  script:
+    - test -n "$CLOUDFLARE_API_TOKEN" || (echo "CLOUDFLARE_API_TOKEN is missing" && exit 1)
+    - export CLOUDFLARE_ACCOUNT_ID="24f6a67227fa065b6b17dec90cd90695"
+    - npx --yes wrangler@4 d1 execute green-grocery-shop-db --remote --config cloudflare/wrangler.toml --file cloudflare/migrations/0004_admin_setup_portal.sql
+    - npx --yes wrangler@4 deploy --config cloudflare/wrangler.toml
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CLOUDFLARE_API_TOKEN'
+      changes:
+        - cloudflare/**/*
+        - .gitlab-ci.yml
+
+# Publish the same dashboard files used by the Android offline shell.
+# Production deployment is restricted to main and requires a masked CI secret.
+cloudflare-pages-deploy:
+  stage: deploy
+  image: node:22-alpine
+  script:
+    - test -s android/app/src/main/assets/www/index.html
+    - test -s android/app/src/main/assets/www/offline.css
+    - export CLOUDFLARE_ACCOUNT_ID="24f6a67227fa065b6b17dec90cd90695"
+    - |
+      node --input-type=module <<'NODE'
+      import {readFileSync, writeFileSync} from 'node:fs';
+      import {createHash} from 'node:crypto';
+      const dir = 'android/app/src/main/assets/www/';
+      const names = ['index.html', 'offline.css', 'brand_logo.jpg', 'admin-setup.html'];
+      const files = {};
+      for (const name of names) {
+        const bytes = readFileSync(dir + name);
+        files[name] = {sha256: createHash('sha256').update(bytes).digest('hex'), size: bytes.length};
+      }
+      const manifest = {version: process.env.CI_COMMIT_SHA || 'development', bridge_api: 1, files};
+      writeFileSync(dir + 'manifest.json', JSON.stringify(manifest, null, 2) + String.fromCharCode(10));
+      console.log('Generated dashboard manifest for ' + manifest.version);
+      NODE
+    - test -n "$CLOUDFLARE_API_TOKEN" || (echo "CLOUDFLARE_API_TOKEN is missing" && exit 1)
+    - npx --yes wrangler@4 whoami --json
+    - npx --yes wrangler@4 pages deploy android/app/src/main/assets/www --project-name=green-grocery-shop-app --branch=main --commit-hash="$CI_COMMIT_SHA" --commit-message="$CI_COMMIT_TITLE"
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CLOUDFLARE_API_TOKEN'
+      changes:
+        - android/app/src/main/assets/www/**/*
+        - android/tailwind.config.cjs
+        - .gitlab-ci.yml
+
+# Manually issue a one-time activation key for the separate Administrator setup website.
+issue-admin-setup-key:
+  stage: issue-pairing
+  image: node:22-alpine
+  script:
+    - |
+      node --input-type=module <<'NODE'
+      import {randomBytes} from 'node:crypto';
+      import {writeFileSync} from 'node:fs';
+      const bootstrap = randomBytes(48).toString('base64url');
+      writeFileSync('.setup-bootstrap-secret', bootstrap, {mode: 0o600});
+      NODE
+    - export CLOUDFLARE_ACCOUNT_ID="24f6a67227fa065b6b17dec90cd90695"
+    - npx --yes wrangler@4 secret put PAIRING_BOOTSTRAP_SECRET --config cloudflare/wrangler.toml < .setup-bootstrap-secret
+    - |
+      node --input-type=module <<'NODE'
+      import {readFileSync} from 'node:fs';
+      const bootstrap = readFileSync('.setup-bootstrap-secret', 'utf8').trim();
+      const base = 'https://dawn-violet-34da.the-green-grocery-shop.workers.dev';
+      let issueResponse, issueBody;
+      for (let attempt = 1; attempt <= 6; attempt++) {
+        if (attempt > 1) await new Promise(resolve => setTimeout(resolve, 2000));
+        issueResponse = await fetch(base + '/api/admin/setup-key', {
+          method: 'POST',
+          headers: {'Authorization': `Bearer ${bootstrap}`, 'Content-Type': 'application/json'},
+          body: '{}'
+        });
+        issueBody = await issueResponse.json();
+        if (issueResponse.ok && issueBody.key) break;
+        if (issueResponse.status !== 401) break;
+      }
+      if (!issueResponse?.ok || !issueBody?.key) throw new Error('Administrator setup key could not be issued: HTTP ' + issueResponse.status + ' ' + JSON.stringify(issueBody));
+      console.log('ADMIN_SETUP_KEY=' + issueBody.key);
+      console.log('EXPIRES_IN_SECONDS=' + issueBody.expires_in_seconds);
+      NODE
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" && $CLOUDFLARE_API_TOKEN'
+      when: manual
+      allow_failure: false

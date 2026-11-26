@@ -31,13 +31,10 @@ jobs:
       - name: Generate complete offline Tailwind CSS
         run: npx --yes tailwindcss@3.4.17 -c android/tailwind.config.cjs -i android/app/src/main/assets/www/tailwind.input.css -o android/app/src/main/assets/www/offline.css --minify
 
-      - name: Restore original shop logo assets
+      - name: Verify offline logo fallback handling
         run: |
-          set -e
-          curl -fsSL 'https://gitlab.com/api/v4/projects/89230374/repository/files/android%2Fapp%2Fsrc%2Fmain%2Fassets%2Fwww%2Fbrand_logo.jpg/raw?ref=main' -o android/app/src/main/assets/www/brand_logo.jpg
-          curl -fsSL 'https://gitlab.com/api/v4/projects/89230374/repository/files/android%2Fapp%2Fsrc%2Fmain%2Fres%2Fdrawable%2Fbrand_logo.jpg/raw?ref=main' -o android/app/src/main/res/drawable/brand_logo.jpg
-          echo '916018f9e479154e1794925fe268c40d1cd444e82911273315ec3ee778d6f161  android/app/src/main/assets/www/brand_logo.jpg' | sha256sum --check
-          echo '916018f9e479154e1794925fe268c40d1cd444e82911273315ec3ee778d6f161  android/app/src/main/res/drawable/brand_logo.jpg' | sha256sum --check
+          test -s android/app/src/main/assets/www/index.html
+          grep -q 'header-logo-fallback' android/app/src/main/assets/www/index.html
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
